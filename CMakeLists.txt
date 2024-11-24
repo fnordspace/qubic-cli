@@ -35,8 +35,10 @@ SET(HEADER_FILES
 	utils.h
 	walletUtils.h
 	proposal.h
+	testnetKey.h
 )
 ADD_EXECUTABLE(qubic-cli main.cpp ${FILES} ${HEADER_FILES})
+ADD_EXECUTABLE(qubic-broadcaster broadcaster.cpp ${FILES} ${HEADER_FILES})
 ADD_LIBRARY(fourq-qubic SHARED fourq-qubic.cpp)
 set_property(TARGET fourq-qubic PROPERTY SOVERSION 1)
 target_compile_options(fourq-qubic PRIVATE -DBUILD_4Q_LIB)
