@@ -3,7 +3,6 @@
 #include "utils.h"
 #include "defines.h"
 
-#include "testnetKey.h"
 #include "K12AndKeyUtil.h"
 //#include "structs.h"
 //#include "connection.h"
@@ -16,6 +15,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <fstream>
 
 struct RequestResponseHeader {
 private:
@@ -170,15 +170,34 @@ static bool qubicSendData(char* ip, char *buffer, unsigned int size) {
 
 
 int main(int argc, char *argv[]) {
-    if (argc < 4){
-        printf("./broadcastComputorTestnet [nodeip] [epoch] [node port]\n");
+    if (argc < 4) {
+        printf("./broadcastComputorTestnet [nodeip] [epoch] [node port] [seeds "
+               "file]\n");
         return 0;
     }
+
     nodePort = std::atoi(argv[3]);
-    printf("Broadcasting computor list to %s:%d epoch %s\n", argv[1], nodePort, argv[2]);
-    unsigned char src_privatek[N_KEY+1][32] __attribute((aligned(32)));
-    unsigned char src_pubkey[N_KEY+1][32] __attribute((aligned(32)));
-    unsigned char src_subseed[N_KEY+1][32] __attribute((aligned(32)));
+    printf("Broadcasting computor list to %s:%d epoch %s\n", argv[1], nodePort,
+           argv[2]);
+
+    // Read seeds from file
+    std::vector<std::string> seeds;
+    std::ifstream seedFile(argv[4]);
+    std::string line;
+    while (std::getline(seedFile, line)) {
+        if (!line.empty()) {
+            seeds.push_back(line);
+        }
+    }
+
+    if (seeds.size() != N_KEY) {
+        printf("Error: Seeds file must contain exactly %d seeds\n", N_KEY);
+        return -1;
+    }
+
+    unsigned char src_privatek[N_KEY + 1][32] __attribute((aligned(32)));
+    unsigned char src_pubkey[N_KEY + 1][32] __attribute((aligned(32)));
+    unsigned char src_subseed[N_KEY + 1][32] __attribute((aligned(32)));
 
     struct {
         RequestResponseHeader header;
@@ -189,8 +208,10 @@ int main(int argc, char *argv[]) {
     packet.header.randomizeDejavu();
     packet.header.setType(2); // BROADCAST_COMPUTORS
     packet.c.epoch = std::atoi(argv[2]);
+
     for (int i = 0; i < N_KEY; i++) {
-        if (!getSubseedFromSeed((unsigned char *) computorSeeds[i], src_subseed[i])) {
+        if (!getSubseedFromSeed((unsigned char *)seeds[i].c_str(),
+                                src_subseed[i])) {
             printf("Error subseeds\n");
             exit(-1);
         }
@@ -198,30 +219,29 @@ int main(int argc, char *argv[]) {
         getPublicKeyFromPrivateKey(src_privatek[i], src_pubkey[i]);
         memcpy(packet.c.publicKeys[i], src_pubkey[i], 32);
     }
-    if (!getSubseedFromSeed((uint8_t*)ARB_SEEDS, src_subseed[N_KEY])) {
+
+    if (!getSubseedFromSeed((uint8_t *)ARB_SEEDS, src_subseed[N_KEY])) {
         printf("Error subseeds\n");
         exit(-1);
     }
     getPrivateKeyFromSubSeed(src_subseed[N_KEY], src_privatek[N_KEY]);
     getPublicKeyFromPrivateKey(src_privatek[N_KEY], src_pubkey[N_KEY]);
+
     uint8_t digest[32];
     uint8_t sig[64];
-    // printf("header size %d\n", sizeof(RequestResponseHeader));
-    // printf("computors size %d\n", sizeof(Computors));
-    // printf("packet size %d\n", sizeof(packet));
-    KangarooTwelve((unsigned char*)&packet.c,
-                   sizeof(Computors) - 64,
-                   digest,
+
+    KangarooTwelve((unsigned char *)&packet.c, sizeof(Computors) - 64, digest,
                    32);
 
     sign(src_subseed[N_KEY], src_pubkey[N_KEY], digest, packet.c.signature);
 
     uint8_t arb_pubkey[32];
     getPublicKeyFromIdentity(ARB_IDEN, arb_pubkey);
-    if (verify(arb_pubkey, digest, sig)){
+    if (verify(arb_pubkey, digest, sig)) {
         printf("Sig ok\n");
     }
-//    printf("trying to send computors...\n");
-    qubicSendData(argv[1], reinterpret_cast<char *>(&packet), packet.header.size());
+
+    qubicSendData(argv[1], reinterpret_cast<char *>(&packet),
+                  packet.header.size());
     return 0;
 }
