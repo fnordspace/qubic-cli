@@ -89,3 +89,6 @@ uint32_t g_qvault_numberOfChangedAddress = 0;
 uint32_t g_qvault_newQCAPHolder_fee = 0;
 uint32_t g_qvault_newreinvesting_fee = 0;
 uint32_t g_qvault_newdev_fee = 0;
+
+char* g_qns_lookup_query = nullptr;
+char* g_qns_filename = nullptr;

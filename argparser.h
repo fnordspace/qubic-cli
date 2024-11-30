@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "logger.h"
+#include "structs.h"
 
 #define CHECK_OVER_PARAMETERS                                                           \
     if (i < argc)                                                                       \
@@ -1043,6 +1044,15 @@ void parseArgument(int argc, char** argv)
         {
             g_cmd = CCF_GET_LATEST_TRANSFERS;
             i += 1;
+            CHECK_OVER_PARAMETERS;
+            break;
+        }
+
+        if (strcmp(argv[i], "-qnslookup") == 0)
+        {
+            g_cmd = QNS_LOOKUP_NAME;
+            g_qns_lookup_query = argv[i + 1];
+            i += 2;
             CHECK_OVER_PARAMETERS;
             break;
         }

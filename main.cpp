@@ -1,3 +1,4 @@
+#include "qns.h"
 #include "stdio.h"
 #include "structs.h"
 #include "global.h"
@@ -14,6 +15,7 @@
 #include "proposal.h"
 #include "qearn.h"
 #include "qvault.h"
+#include "qns.h"
 
 int run(int argc, char* argv[])
 {
@@ -488,6 +490,27 @@ int run(int argc, char* argv[])
             saveUnbannedAddress(g_nodeIp, g_nodePort, g_seed,  g_offsetScheduledTick, g_qvaultIdentity);
             break;
 
+        case QNS_LOOKUP_NAME:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            printf("Lookup %s/n", g_qns_lookup_query);
+            qnsLookup(g_nodeIp, g_nodePort, g_seed, g_qns_lookup_query);
+            break;
+        case QNS_REGISTER_NAME:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            qnsRegisterName(g_nodeIp, g_nodePort, g_seed, g_qns_filename);
+            break;
+        case QNS_UPDATE_NAME:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            qnsUpdate(g_nodeIp, g_nodePort, g_seed, g_qns_filename);
+            break;
+        case QNS_TRANSFER_OWNER:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            qnsTransferOwnership(g_nodeIp, g_nodePort, g_seed, g_qns_filename);
+            break;
         default:
             printf("Unexpected command!\n");
             break;

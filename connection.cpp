@@ -259,9 +259,12 @@ template QEarnGetStateOfRound_output QubicConnection::receivePacketWithHeaderAs<
 template QEarnGetUserLockStatus_output QubicConnection::receivePacketWithHeaderAs<QEarnGetUserLockStatus_output>();
 template QEarnGetStatsPerEpoch_output QubicConnection::receivePacketWithHeaderAs<QEarnGetStatsPerEpoch_output>();
 template QEarnGetEndedStatus_output QubicConnection::receivePacketWithHeaderAs<QEarnGetEndedStatus_output>();
+template QNSlookup_output QubicConnection::receivePacketWithHeaderAs<QNSlookup_output>();
 
 template ExchangePublicPeers QubicConnection::receivePacketAs<ExchangePublicPeers>();
 
 template std::vector<Tick> QubicConnection::getLatestVectorPacketAs<Tick>();
 template std::vector<RespondOwnedAssets> QubicConnection::getLatestVectorPacketAs<RespondOwnedAssets>();
 template std::vector<RespondPossessedAssets> QubicConnection::getLatestVectorPacketAs<RespondPossessedAssets>();
+
+
