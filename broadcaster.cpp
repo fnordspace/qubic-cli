@@ -8,6 +8,7 @@
 //#include "connection.h"
 //#include "fourq-qubic.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <stdexcept>
 
@@ -171,7 +172,7 @@ static bool qubicSendData(char* ip, char *buffer, unsigned int size) {
 
 int main(int argc, char *argv[]) {
     if (argc < 4) {
-        printf("./broadcastComputorTestnet [nodeip] [epoch] [node port] [seeds "
+        printf("./broadcastComputorTestnet [nodeip] [epoch] [node port] [Complist "
                "file]\n");
         return 0;
     }
@@ -180,24 +181,44 @@ int main(int argc, char *argv[]) {
     printf("Broadcasting computor list to %s:%d epoch %s\n", argv[1], nodePort,
            argv[2]);
 
-    // Read seeds from file
-    std::vector<std::string> seeds;
-    std::ifstream seedFile(argv[4]);
+    std::vector<std::string> IDs;
+
+    // Also try reading complists format
+    std::ifstream complist(argv[4]);
     std::string line;
-    while (std::getline(seedFile, line)) {
-        if (!line.empty()) {
-            seeds.push_back(line);
+    while (std::getline(complist, line)) {
+        // Skip empty lines
+        if (line.empty())
+            continue;
+
+        // Check if line starts with "Epoch:" or contains "VERIFIED"
+        if (line.find("Epoch:") != std::string::npos ||
+            line.find("Computor list") != std::string::npos) {
+            break;
+        }
+
+        // Extract ID by removing leading number and whitespace
+        size_t idStart = line.find_first_not_of("0123456789 ");
+        if (idStart != std::string::npos) {
+            std::string id = line.substr(idStart);
+            if (!id.empty()) {
+            IDs.push_back(id);
+            }
         }
     }
 
-    if (seeds.size() != N_KEY) {
-        printf("Error: Seeds file must contain exactly %d seeds\n", N_KEY);
+    if (IDs.size() != N_KEY) {
+        printf("Error: ID file must contain exactly %d id\n", N_KEY);
         return -1;
     }
 
-    unsigned char src_privatek[N_KEY + 1][32] __attribute((aligned(32)));
-    unsigned char src_pubkey[N_KEY + 1][32] __attribute((aligned(32)));
-    unsigned char src_subseed[N_KEY + 1][32] __attribute((aligned(32)));
+    // unsigned char src_privatek[N_KEY + 1][32] __attribute((aligned(32)));
+    uint8_t src_pubkey[N_KEY][32] __attribute((aligned(32)));
+    // unsigned char src_subseed[N_KEY + 1][32] __attribute((aligned(32)));
+
+    unsigned char arb_privatek[32] __attribute((aligned(32)));
+    unsigned char arb_pubkey[32] __attribute((aligned(32)));
+    unsigned char arb_subseed[32] __attribute((aligned(32)));
 
     struct {
         RequestResponseHeader header;
@@ -210,22 +231,28 @@ int main(int argc, char *argv[]) {
     packet.c.epoch = std::atoi(argv[2]);
 
     for (int i = 0; i < N_KEY; i++) {
-        if (!getSubseedFromSeed((unsigned char *)seeds[i].c_str(),
-                                src_subseed[i])) {
-            printf("Error subseeds\n");
-            exit(-1);
-        }
-        getPrivateKeyFromSubSeed(src_subseed[i], src_privatek[i]);
-        getPublicKeyFromPrivateKey(src_privatek[i], src_pubkey[i]);
+        getPublicKeyFromIdentity(IDs[i].c_str(), src_pubkey[i]);
         memcpy(packet.c.publicKeys[i], src_pubkey[i], 32);
+        printf("Added ID Nr. %u %s\n", i+1, IDs[i].c_str());
+        printf("Generated pubkey: ");
+        bool nonZero = false;
+        for (int j = 0; j < 32; j++) {
+            printf("%02x", src_pubkey[i][j]);
+            if (src_pubkey[i][j] != 0) {
+              nonZero = true;
+            }
+        }
+        if (!nonZero) {
+            printf(" WARNING: All bytes are zero!");
+        }
+        printf("\n\n");
     }
-
-    if (!getSubseedFromSeed((uint8_t *)ARB_SEEDS, src_subseed[N_KEY])) {
+    if (!getSubseedFromSeed((uint8_t *)ARB_SEEDS, arb_subseed)) {
         printf("Error subseeds\n");
         exit(-1);
     }
-    getPrivateKeyFromSubSeed(src_subseed[N_KEY], src_privatek[N_KEY]);
-    getPublicKeyFromPrivateKey(src_privatek[N_KEY], src_pubkey[N_KEY]);
+    getPrivateKeyFromSubSeed(arb_subseed, arb_privatek);
+    getPublicKeyFromPrivateKey(arb_privatek, arb_pubkey);
 
     uint8_t digest[32];
     uint8_t sig[64];
@@ -233,9 +260,9 @@ int main(int argc, char *argv[]) {
     KangarooTwelve((unsigned char *)&packet.c, sizeof(Computors) - 64, digest,
                    32);
 
-    sign(src_subseed[N_KEY], src_pubkey[N_KEY], digest, packet.c.signature);
+    sign(arb_subseed, arb_pubkey, digest, packet.c.signature);
 
-    uint8_t arb_pubkey[32];
+    // uint8_t arb_pubkey[32];
     getPublicKeyFromIdentity(ARB_IDEN, arb_pubkey);
     if (verify(arb_pubkey, digest, sig)) {
         printf("Sig ok\n");
