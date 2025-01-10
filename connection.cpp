@@ -22,6 +22,7 @@
 #include "qxStruct.h"
 #include "qvault.h"
 #include "qearn.h"
+#include "qns.h"
 
 #ifdef _MSC_VER
 static int connect(const char* nodeIp, int nodePort)

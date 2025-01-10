@@ -541,32 +541,6 @@ struct GetSendToManyV1Fee_output
 };
 
 
-constexpr unsigned long long QNS_NAME_LENGTH = 256;
-
-using QNSOwner = const char*;
-using IPFSHash = const char*;
-
-struct QNSName {
-  unsigned char name[QNS_NAME_LENGTH];
-};
-// Structure of each entry behind the lookup.
-struct QNSEntry {
-  // Name of the entry. Potentially needed to check for hash collisions
-  QNSName name;
-  // Id to look up
-  char id[55];
-  // Owner
-  QNSOwner owner;
-  // ipfs hash
-  IPFSHash ipfs;
-  // Expiration date
-  int expiration;
-};
-
-struct QNSlookup_output {
-    QNSEntry value;
-    int returnCode;
-};
 
 struct ContractIPOBid
 {

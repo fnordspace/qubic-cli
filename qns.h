@@ -27,6 +27,52 @@
 /*   int expiration; */
 /* }; */
 
+// struct QNSEntry {
+//   // Name of the entry. Potentially needed to check for hash collisions
+//   QNSName name;
+//   // Id to look up
+//   QPI::id id;
+//   // Owner
+//   QNSOwner owner;
+//   // ipfs hash
+//   IPFSHash ipfs;
+//   // Expiration date
+//   QPI::uint8 expiration;
+// };
+
+
+constexpr unsigned long long QNS_NAME_LENGTH = 256;
+
+using QNSOwner = const char*;
+using IPFSHash = const char*;
+
+struct QNSName {
+  unsigned char name[QNS_NAME_LENGTH];
+};
+// Structure of each entry behind the lookup.
+struct QNSEntry {
+  // Name of the entry. Potentially needed to check for hash collisions
+  QNSName name;
+  // Id to look up
+  char id[55];
+  // Owner
+  QNSOwner owner;
+  // ipfs hash
+  IPFSHash ipfs;
+  // Expiration date
+  int expiration;
+};
+
+struct QNSlookup_output {
+    QNSEntry value;
+    int returnCode;
+
+    static constexpr unsigned char type()
+    {
+        return RespondContractFunction::type();
+    }
+};
+
 QNSEntry qnsLookup(const char* nodeIp, int nodePort, const char* seed, const char* query);
 void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const QNSEntry entry);
 void qnsUpdate(const char* nodeIp, int nodePort, const char* seed, const QNSEntry newEntry);
