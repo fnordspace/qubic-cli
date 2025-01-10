@@ -90,7 +90,7 @@ QNSEntry qnsLookup(const char* nodeIp, int nodePort, const char* seed, const cha
     return res.value;
 }
 
-void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const QNSEntry entry)
+void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const uint32_t scheduledTickOffset, const QNSEntry entry)
 {
     auto qc = make_qc(nodeIp, nodePort);
 
@@ -112,14 +112,15 @@ void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const Q
     ((uint64_t*)destPublicKey)[2] = 0;
     ((uint64_t*)destPublicKey)[3] = 0;
 
-    // struct {
-    //     RequestResponseHeader header;
-    //     Transaction transaction;
-    //     SendToManyV1_input stm;
-    //     unsigned char signature[64];
-    // } packet;
-    // memset(&packet.stm, 0, sizeof(SendToManyV1_input));
-    // packet.transaction.amount = 0;
+    struct {
+        RequestResponseHeader header;
+        Transaction transaction;
+        registerName_input input;
+        unsigned char signature[64];
+    } packet;
+    packet.input.entry = entry;
+    // memset(&packet.reg, 0, sizeof(SendToManyV1_input));
+    packet.transaction.amount = 0;
     // for (int i = 0; i < std::min(25, int(addresses.size())); i++){
     //     getPublicKeyFromIdentity(addresses[i].data(), packet.stm.addresses[i]);
     //     packet.stm.amounts[i] = amounts[i];
@@ -128,32 +129,32 @@ void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const Q
     // long long fee = getSendToManyV1Fee(qc);
     // LOG("Send to many V1 fee: %lld\n", fee);
     // packet.transaction.amount += fee; // fee
-    // memcpy(packet.transaction.sourcePublicKey, sourcePublicKey, 32);
-    // memcpy(packet.transaction.destinationPublicKey, destPublicKey, 32);
-    // uint32_t currentTick = getTickNumberFromNode(qc);
-    // packet.transaction.tick = currentTick + scheduledTickOffset;
-    // packet.transaction.inputType = qutilProcedureId::SendToManyV1;
-    // packet.transaction.inputSize = sizeof(SendToManyV1_input);
-    // KangarooTwelve((unsigned char*)&packet.transaction,
-    //                sizeof(packet.transaction) + sizeof(SendToManyV1_input),
-    //                digest,
-    //                32);
-    // sign(subseed, sourcePublicKey, digest, signature);
-    // memcpy(packet.signature, signature, 64);
-    // packet.header.setSize(sizeof(packet));
-    // packet.header.zeroDejavu();
-    // packet.header.setType(BROADCAST_TRANSACTION);
+    memcpy(packet.transaction.sourcePublicKey, sourcePublicKey, 32);
+    memcpy(packet.transaction.destinationPublicKey, destPublicKey, 32);
+    uint32_t currentTick = getTickNumberFromNode(qc);
+    packet.transaction.tick = currentTick + scheduledTickOffset;
+    packet.transaction.inputType = QNS_REGISTER_NAME;
+    packet.transaction.inputSize = sizeof(registerName_input);
+    KangarooTwelve((unsigned char*)&packet.transaction,
+                   sizeof(packet.transaction) + sizeof(registerName_input),
+                   digest,
+                   32);
+    sign(subseed, sourcePublicKey, digest, signature);
+    memcpy(packet.signature, signature, 64);
+    packet.header.setSize(sizeof(packet));
+    packet.header.zeroDejavu();
+    packet.header.setType(BROADCAST_TRANSACTION);
 
-    // qc->sendData((uint8_t *) &packet, packet.header.size());
-    // KangarooTwelve((unsigned char*)&packet.transaction,
-    //                sizeof(packet.transaction) + sizeof(SendToManyV1_input) + SIGNATURE_SIZE,
-    //                digest,
-    //                32); // recompute digest for txhash
-    // getTxHashFromDigest(digest, txHash);
-    // LOG("SendToManyV1 tx has been sent!\n");
-    // printReceipt(packet.transaction, txHash, nullptr);
-    // LOG("run ./qubic-cli [...] -checktxontick %u %s\n", currentTick + scheduledTickOffset, txHash);
-    // LOG("to check your tx confirmation status\n");
+    qc->sendData((uint8_t *) &packet, packet.header.size());
+    KangarooTwelve((unsigned char*)&packet.transaction,
+                   sizeof(packet.transaction) + sizeof(registerName_input) + SIGNATURE_SIZE,
+                   digest,
+                   32); // recompute digest for txhash
+    getTxHashFromDigest(digest, txHash);
+    LOG("registerName tx has been sent!\n");
+    printReceipt(packet.transaction, txHash, nullptr);
+    LOG("run ./qubic-cli [...] -checktxontick %u %s\n", currentTick + scheduledTickOffset, txHash);
+    LOG("to check your tx confirmation status\n");
 }
 
 
@@ -278,10 +279,10 @@ QNSEntry qnsReadFile(const char *filename) {
     return res;
 }
 
-void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const char* filename)
+void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const uint32_t scheduledTick, const char* filename)
 {
     QNSEntry entry = qnsReadFile(filename);
-    qnsRegisterName(nodeIp, nodePort, seed, entry);
+    qnsRegisterName(nodeIp, nodePort, seed, scheduledTick, entry);
 };
 
 

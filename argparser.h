@@ -1056,6 +1056,15 @@ void parseArgument(int argc, char** argv)
             CHECK_OVER_PARAMETERS;
             break;
         }
+
+        if (strcmp(argv[i], "-qnsregister") == 0)
+        {
+            g_cmd = QNS_REGISTER_NAME;
+            g_qns_filename = argv[i + 1];
+            i += 2;
+            CHECK_OVER_PARAMETERS;
+            break;
+        }
         if (strcmp(argv[i], "-f") == 0 || strcmp(argv[i], "-force") == 0)
         {
             g_force = true;

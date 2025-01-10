@@ -74,11 +74,11 @@ struct QNSlookup_output {
 };
 
 QNSEntry qnsLookup(const char* nodeIp, int nodePort, const char* seed, const char* query);
-void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const QNSEntry entry);
+void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const uint32_t scheduledTickOffset, const QNSEntry entry);
 void qnsUpdate(const char* nodeIp, int nodePort, const char* seed, const QNSEntry newEntry);
 void qnsTransferOwnership(const char* nodeIp, int nodePort, const char* seed, const QNSEntry entry);
 
-void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const char* filename);
+void qnsRegisterName(const char* nodeIp, int nodePort, const char* seed, const uint32_t scheduledTickOffset, const char* filename);
 void qnsUpdate(const char* nodeIp, int nodePort, const char* seed, const char* filename);
 void qnsTransferOwnership(const char* nodeIp, int nodePort, const char* seed, const char* filename);
 

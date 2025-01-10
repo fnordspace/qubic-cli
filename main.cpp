@@ -499,7 +499,7 @@ int run(int argc, char* argv[])
         case QNS_REGISTER_NAME:
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
-            qnsRegisterName(g_nodeIp, g_nodePort, g_seed, g_qns_filename);
+            qnsRegisterName(g_nodeIp, g_nodePort, g_seed, g_offsetScheduledTick, g_qns_filename);
             break;
         case QNS_UPDATE_NAME:
             sanityCheckNode(g_nodeIp, g_nodePort);
