@@ -1,12 +1,13 @@
 #include <cstring>
+#include <iostream>
+#include <string>
+
 #include "SCUtils.h"
 #include "keyUtils.h"
 #include "structs.h"
 #include "qxStruct.h"
 #include "connection.h"
 #include "logger.h"
-
-#include <iostream>
 
 void dumpQxContractToCSV(const char* input, const char* output)
 {
@@ -118,5 +119,4 @@ void dumpContractToCSV(const char* input, uint32_t contractId, const char* outpu
         std::cout << "Unsupported contract id: " << contractId << std::endl;
         break;
     }
-
 }

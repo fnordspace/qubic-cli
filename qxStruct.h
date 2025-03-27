@@ -1,5 +1,7 @@
 #pragma once
 
+#include "structs.h"
+
 struct IssueAsset_input
 {
     uint64_t name;
@@ -80,7 +82,8 @@ struct EntityBidOrders_output
     Order orders[256];
 };
 
-struct qxGetAssetOrder_input{
+struct qxGetAssetOrder_input
+{
     uint8_t issuer[32];
     uint64_t assetName;
     uint64_t offset;
@@ -88,28 +91,35 @@ struct qxGetAssetOrder_input{
 static_assert(sizeof(qxGetAssetOrder_input) == sizeof(AssetAskOrders_input), "wrong implementation");
 static_assert(sizeof(qxGetAssetOrder_input) == sizeof(AssetBidOrders_input), "wrong implementation");
 
-struct qxGetAssetOrder_output{
+struct qxGetAssetOrder_output
+{
     struct Order
     {
         uint8_t entity[32];
         long long price;
         long long numberOfShares;
     };
-
     Order orders[256];
+
+    static constexpr unsigned char type()
+    {
+        return RespondContractFunction::type();
+    }
 };
 
 static_assert(sizeof(qxGetAssetOrder_output) == sizeof(AssetAskOrders_output), "wrong implementation");
 static_assert(sizeof(qxGetAssetOrder_output) == sizeof(AssetBidOrders_output), "wrong implementation");
 
-struct qxGetEntityOrder_input{
+struct qxGetEntityOrder_input
+{
     uint8_t entity[32];
     uint64_t offset;
 };
 static_assert(sizeof(qxGetEntityOrder_input) == sizeof(EntityAskOrders_input), "wrong implementation");
 static_assert(sizeof(qxGetEntityOrder_input) == sizeof(EntityBidOrders_input), "wrong implementation");
 
-struct qxGetEntityOrder_output{
+struct qxGetEntityOrder_output
+{
     struct Order
     {
         uint8_t issuer[32];
@@ -118,11 +128,14 @@ struct qxGetEntityOrder_output{
         long long numberOfShares;
     };
     Order orders[256];
+
+    static constexpr unsigned char type()
+    {
+        return RespondContractFunction::type();
+    }
 };
 static_assert(sizeof(qxGetEntityOrder_output) == sizeof(EntityAskOrders_output), "wrong implementation");
 static_assert(sizeof(qxGetEntityOrder_output) == sizeof(EntityBidOrders_output), "wrong implementation");
-
-
 
 struct TransferAssetOwnershipAndPossession_input
 {
@@ -180,7 +193,8 @@ struct RemoveFromBidOrder_output
     long long removedNumberOfShares;
 };
 
-struct qxOrderAction_input{
+struct qxOrderAction_input
+{
     uint8_t issuer[32];
     uint64_t assetName;
     long long price;
@@ -191,6 +205,21 @@ static_assert(sizeof(qxOrderAction_input) == sizeof(RemoveFromAskOrder_input), "
 static_assert(sizeof(qxOrderAction_input) == sizeof(AddToBidOrder_input), "wrong implementation");
 static_assert(sizeof(qxOrderAction_input) == sizeof(AddToAskOrder_input), "wrong implementation");
 
+#pragma pack (push, 1)
+struct qxTransferShareManagementRights_input
+{
+    struct
+    {
+        uint8_t issuer[32];
+        uint64_t assetName;
+    } asset;
+    int64_t numberOfShares;
+    uint32_t newManagingContractIndex;
+};
+#pragma pack (pop)
+static_assert(sizeof(qxTransferShareManagementRights_input) == 52, "wrong implementation");
+
+#pragma pack (push, 8)
 struct QX : ContractBase
 {
     uint64_t _earnedAmount;
@@ -254,6 +283,7 @@ struct QX : ContractBase
         int64_t numberOfShares;
     } _numberOfReservedShares_output;
 };
+#pragma pack (pop)
 
 // Match size between cli and core struct. may be changed in the future
 static constexpr uint64_t QX_STATE_SIZE = 621806120ULL;

@@ -1,5 +1,3 @@
-#include "structs.h"
-#include <stdexcept>
 #ifdef _MSC_VER
 #pragma comment(lib, "Ws2_32.lib")
 #include <Winsock2.h>
@@ -12,61 +10,105 @@
 #include <unistd.h>
 #endif
 #include <cstring>
+#include <string>
+#include <stdexcept>
 
 #include "connection.h"
 #include "logger.h"
+#include "structs.h"
+
+// includes for template instantiations
+#include "quottery.h"
+#include "qxStruct.h"
+#include "qvault.h"
+#include "qearn.h"
+#include "msvault.h"
+#include "testUtils.h"
+
+#define DEFAULT_TIMEOUT_MSEC 1000
+
 #ifdef _MSC_VER
+
+static bool setTimeout(int serverSocket, int optName, unsigned long milliseconds)
+{
+    DWORD tv = milliseconds;
+    if (setsockopt(serverSocket, SOL_SOCKET, optName, (const char*)&tv, sizeof tv) != 0)
+    {
+        LOG("setsockopt failed with error: %d\n", WSAGetLastError());
+        return false;
+    }
+    return true;
+}
+
 static int connect(const char* nodeIp, int nodePort)
 {
     WSADATA wsa_data;
     WSAStartup(MAKEWORD(2, 0), &wsa_data);
 
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    size_t tv = 1000;
-    setsockopt(serverSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
-    setsockopt(serverSocket, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof tv);
+    if (!setTimeout(serverSocket, SO_RCVTIMEO, DEFAULT_TIMEOUT_MSEC))
+        return -1;
+    if (!setTimeout(serverSocket, SO_SNDTIMEO, DEFAULT_TIMEOUT_MSEC))
+        return -1;
     sockaddr_in addr;
     memset((char*)&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(nodePort);
 
-    if (inet_pton(AF_INET, nodeIp, &addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, nodeIp, &addr.sin_addr) <= 0) 
+    {
         LOG("Error translating command line ip address to usable one.");
         return -1;
     }
     int res = connect(serverSocket, (const sockaddr*)&addr, sizeof(addr));
-    if (res < 0) {
+    if (res < 0) 
+    {
         LOG("Failed to connect %s | error %d\n", nodeIp, res);
         return -1;
     }
     return serverSocket;
 }
+
 #else
+
+static bool setTimeout(int serverSocket, int optName, unsigned long milliseconds)
+{
+    struct timeval tv;
+    tv.tv_sec = milliseconds / 1000;
+    tv.tv_usec = (milliseconds % 1000) * 1000;
+    if (setsockopt(serverSocket, SOL_SOCKET, optName, (const char*)&tv, sizeof tv) != 0)
+        return false;
+    return true;
+}
+
 static int connect(const char* nodeIp, int nodePort)
 {
 	int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
-    setsockopt(serverSocket, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
-    setsockopt(serverSocket, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof tv);
+    if (!setTimeout(serverSocket, SO_RCVTIMEO, DEFAULT_TIMEOUT_MSEC))
+        return -1;
+    if (!setTimeout(serverSocket, SO_SNDTIMEO, DEFAULT_TIMEOUT_MSEC))
+        return -1;
     sockaddr_in addr;
     memset((char*)&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(nodePort);
 
-    if (inet_pton(AF_INET, nodeIp, &addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, nodeIp, &addr.sin_addr) <= 0) 
+    {
         LOG("Error translating command line ip address to usable one.");
         return -1;
     }
 
-    if (connect(serverSocket, (const sockaddr *)&addr, sizeof(addr)) < 0) {
+    if (connect(serverSocket, (const sockaddr *)&addr, sizeof(addr)) < 0) 
+    {
         LOG("Failed to connect %s\n", nodeIp);
         return -1;
     }
     return serverSocket;
 }
+
 #endif
+
 QubicConnection::QubicConnection(const char* nodeIp, int nodePort)
 {
 	memset(mNodeIp, 0, 32);
@@ -80,52 +122,65 @@ QubicConnection::QubicConnection(const char* nodeIp, int nodePort)
     mHandshakeData.resize(sizeof(ExchangePublicPeers));
     uint8_t* data = mHandshakeData.data();
     *((ExchangePublicPeers*)data) = receivePacketWithHeaderAs<ExchangePublicPeers>();
+
+    // If node has no ComputorList or a self-generated ComputorList it will requestComputor upon tcp initialization
+    // Ignore this message if it is here
+    // This waits for timeout if RequestComputors is not sent. Temporarily reduce timeout to reduce waiting time.
+    setTimeout(mSocket, SO_RCVTIMEO, DEFAULT_TIMEOUT_MSEC / 5);
+    try
+    {
+        *((RequestComputors*)data) = receivePacketWithHeaderAs<RequestComputors>();
+    }
+    catch(std::logic_error& e) {}
+    setTimeout(mSocket, SO_RCVTIMEO, DEFAULT_TIMEOUT_MSEC);
 }
+
 void QubicConnection::getHandshakeData(std::vector<uint8_t>& buffer)
 {
     buffer = mHandshakeData;
 }
+
 QubicConnection::~QubicConnection()
 {
 	close(mSocket);
 }
 
+// Receive the requested number of bytes (sz) or less if sz bytes have not been received after timeout. Return number of received bytes.
 int QubicConnection::receiveData(uint8_t* buffer, int sz)
 {
-    if (sz > 4096){
-        LOG("Warning: trying to receive too big chunk, consider using receiveDataBig instead\n");
+    int totalRecvSz = 0;
+    while (sz)
+    {
+        // Note that recv may return before sz bytes have been received, it only blocks until socket timeout if no
+        // data has been received!
+        // Linux manual page:
+        //   "If no messages are available at the socket, the receive calls wait for a message to arrive [...]
+        //   The receive calls normally return any data available, up to the requested amount,
+        //   rather than waiting for receipt of the full amount requested."
+        // Microsoft docs:
+        //   "For connection-oriented sockets (type SOCK_STREAM for example), calling recv will
+        //   return as much data as is currently available—up to the size of the buffer specified. [...]
+        //   If no incoming data is available at the socket, the recv call blocks and waits for data to arrive [...]"
+        int recvSz = recv(mSocket, (char*)buffer + totalRecvSz, sz, 0);
+        if (recvSz <= 0)
+        {
+            // timeout, closed connection, or other error
+            break;
+        }
+        totalRecvSz += recvSz;
+        sz -= recvSz;
     }
-	return recv(mSocket, (char*)buffer, sz, 0);
+    return totalRecvSz;
 }
 
-int QubicConnection::receiveDataBig(uint8_t* buffer, int sz)
+int QubicConnection::receiveAllDataOrThrowException(uint8_t* buffer, int sz)
 {
-    int count = 0;
-    while (sz){
-        int chunk = std::min(sz, 1024);
-        int received_byte = receiveData(buffer + count, chunk);
-        count += received_byte;
-        sz -= received_byte;
-    }
-    return count;
-}
-
-// TODO: remove this function, send/recv size should be known before hand
-void QubicConnection::receiveDataAll(std::vector<uint8_t>& receivedData)
-{
-    receivedData.resize(0);
-    uint8_t tmp[1024];
-    int recvByte = receiveData(tmp, 1024);
-    while (recvByte > 0)
+    int recvSz = receiveData(buffer, sz);
+    if (recvSz != sz)
     {
-        receivedData.resize(recvByte + receivedData.size());
-        memcpy(receivedData.data() + receivedData.size() - recvByte, tmp, recvByte);
-        recvByte = receiveData(tmp, 1024);
+        throw std::logic_error("Received incomplete data! Expected " + std::to_string(sz) + " bytes, received " + std::to_string(recvSz) + " bytes");
     }
-    if (receivedData.size() == 0)
-    {
-        throw std::logic_error("Error: Did not receive any response from node.");
-    }
+    return recvSz;
 }
 
 void QubicConnection::resolveConnection()
@@ -135,28 +190,43 @@ void QubicConnection::resolveConnection()
         throw std::logic_error("Unable to establish connection.");
 }
 
-// Receive the next qubic packet with a RequestResponseHeader
+// Receive the next qubic packet with a RequestResponseHeader that matches T
 template <typename T>
 T QubicConnection::receivePacketWithHeaderAs()
 {
     // first receive the header
     RequestResponseHeader header;
-    int recvByte = receiveData((uint8_t*)&header, sizeof(RequestResponseHeader));
-    if (recvByte != sizeof(RequestResponseHeader))
+    int recvByte = -1, packetSize = -1, remainingSize = -1;
+    while (true)
     {
-        throw std::logic_error("No connection.");
-    }
-    int packet_size = header.size();
-    T result;
-    memset(&result, 0, sizeof(T));
-    if (packet_size - sizeof(RequestResponseHeader))
-    {
-        memset(mBuffer, 0, packet_size - sizeof(RequestResponseHeader));
-        // receive the rest
-        recvByte = receiveData(mBuffer, packet_size - sizeof(RequestResponseHeader));
-        if (recvByte != packet_size - sizeof(RequestResponseHeader)){
+        recvByte = receiveData((uint8_t*)&header, sizeof(RequestResponseHeader));
+        if (recvByte != sizeof(RequestResponseHeader))
+        {
             throw std::logic_error("No connection.");
         }
+        if (header.type() == END_RESPOND)
+        {
+            throw EndResponseReceived();
+        }
+        if (header.type() != T::type())
+        {
+            // skip this packet and keep receiving
+            packetSize = header.size();
+            remainingSize = packetSize - sizeof(RequestResponseHeader);
+            receiveAllDataOrThrowException(mBuffer, remainingSize);
+            continue;
+        }
+        break;
+    }
+    
+    packetSize = header.size();
+    remainingSize = packetSize - sizeof(RequestResponseHeader);
+    T result;
+    memset(&result, 0, sizeof(T));
+    if (remainingSize)
+    {
+        memset(mBuffer, 0, sizeof(T));
+        receiveAllDataOrThrowException(mBuffer, remainingSize);
         result = *((T*)mBuffer);
     }
     return result;
@@ -166,11 +236,12 @@ T QubicConnection::receivePacketWithHeaderAs()
 template <typename T>
 T QubicConnection::receivePacketAs()
 {
-    int packet_size = sizeof(T);
+    int packetSize = sizeof(T);
     T result;
     memset(&result, 0, sizeof(T));
-    int recvByte = receiveData(mBuffer, packet_size);
-    if (recvByte != packet_size){
+    int recvByte = receiveData(mBuffer, packetSize);
+    if (recvByte != packetSize)
+    {
         throw std::logic_error("Unexpected data size.");
     }
     result = *((T*)mBuffer);
@@ -180,29 +251,22 @@ T QubicConnection::receivePacketAs()
 template <typename T>
 std::vector<T> QubicConnection::getLatestVectorPacketAs()
 {
-    std::vector<uint8_t> receivedData;
-    receivedData.resize(0);
-    uint8_t tmp[1024];
-    int recvByte = receiveData(tmp, 1024);
-    while (recvByte > 0)
-    {
-        receivedData.resize(recvByte + receivedData.size());
-        memcpy(receivedData.data() + receivedData.size() - recvByte, tmp, recvByte);
-        recvByte = receiveData(tmp, 1024);
-    }
-
-    recvByte = receivedData.size();
-    uint8_t* data = receivedData.data();
-    int ptr = 0;
     std::vector<T> results;
-    while (ptr < recvByte)
+    while (true)
     {
-        auto header = (RequestResponseHeader*)(data+ptr);
-        if (header->type() == T::type()){
-            auto dataT = (T*)(data + ptr + sizeof(RequestResponseHeader));
-            results.push_back(*dataT);
+        try
+        {
+            results.push_back(receivePacketWithHeaderAs<T>());
         }
-        ptr+= header->size();
+        catch (EndResponseReceived& e)
+        {
+            break;
+        }
+        catch (std::logic_error& e)
+        {
+            LOG("%s\n", e.what());
+            break;
+        }
     }
     return results;
 }
@@ -211,8 +275,10 @@ int QubicConnection::sendData(uint8_t* buffer, int sz)
 {
     int size = sz;
     int numberOfBytes;
-    while (size) {
-        if ((numberOfBytes = send(mSocket, (char*)buffer, size, 0)) <= 0) {
+    while (size) 
+    {
+        if ((numberOfBytes = send(mSocket, (char*)buffer, size, 0)) <= 0) 
+        {
             return 0;
         }
         buffer += numberOfBytes;
@@ -225,7 +291,53 @@ template SpecialCommand QubicConnection::receivePacketWithHeaderAs<SpecialComman
 template SpecialCommandToggleMainModeResquestAndResponse QubicConnection::receivePacketWithHeaderAs<SpecialCommandToggleMainModeResquestAndResponse>();
 template SpecialCommandSetSolutionThresholdResquestAndResponse QubicConnection::receivePacketWithHeaderAs<SpecialCommandSetSolutionThresholdResquestAndResponse>();
 template SpecialCommandSendTime QubicConnection::receivePacketWithHeaderAs<SpecialCommandSendTime>();
+template SpecialCommandSetConsoleLoggingModeRequestAndResponse QubicConnection::receivePacketWithHeaderAs<SpecialCommandSetConsoleLoggingModeRequestAndResponse>();
 template GetSendToManyV1Fee_output QubicConnection::receivePacketWithHeaderAs<GetSendToManyV1Fee_output>();
+template CurrentTickInfo QubicConnection::receivePacketWithHeaderAs<CurrentTickInfo>();
+template CurrentSystemInfo QubicConnection::receivePacketWithHeaderAs<CurrentSystemInfo>();
+template TickData QubicConnection::receivePacketWithHeaderAs<TickData>();
+template RespondTxStatus QubicConnection::receivePacketWithHeaderAs<RespondTxStatus>();
+template BroadcastComputors QubicConnection::receivePacketWithHeaderAs<BroadcastComputors>();
+template RespondContractIPO QubicConnection::receivePacketWithHeaderAs<RespondContractIPO>();
+// QUOTTERY
+template qtryBasicInfo_output QubicConnection::receivePacketWithHeaderAs<qtryBasicInfo_output>();
+template getBetInfo_output QubicConnection::receivePacketWithHeaderAs<getBetInfo_output>();
+template getBetOptionDetail_output QubicConnection::receivePacketWithHeaderAs<getBetOptionDetail_output>();
+template getActiveBet_output QubicConnection::receivePacketWithHeaderAs<getActiveBet_output>();
+template getActiveBetByCreator_output QubicConnection::receivePacketWithHeaderAs<getActiveBetByCreator_output>();
+// QX
+template QxFees_output QubicConnection::receivePacketWithHeaderAs<QxFees_output>();
+template qxGetAssetOrder_output QubicConnection::receivePacketWithHeaderAs<qxGetAssetOrder_output>();
+template qxGetEntityOrder_output QubicConnection::receivePacketWithHeaderAs<qxGetEntityOrder_output>();
+// QVAULT
+template QVaultGetData_output QubicConnection::receivePacketWithHeaderAs<QVaultGetData_output>();
+// QEARN
+template QEarnGetLockInfoPerEpoch_output QubicConnection::receivePacketWithHeaderAs<QEarnGetLockInfoPerEpoch_output>();
+template QEarnGetUserLockedInfo_output QubicConnection::receivePacketWithHeaderAs<QEarnGetUserLockedInfo_output>();
+template QEarnGetStateOfRound_output QubicConnection::receivePacketWithHeaderAs<QEarnGetStateOfRound_output>();
+template QEarnGetUserLockStatus_output QubicConnection::receivePacketWithHeaderAs<QEarnGetUserLockStatus_output>();
+template QEarnGetStatsPerEpoch_output QubicConnection::receivePacketWithHeaderAs<QEarnGetStatsPerEpoch_output>();
+template QEarnGetEndedStatus_output QubicConnection::receivePacketWithHeaderAs<QEarnGetEndedStatus_output>();
+template QEarnGetBurnedAndBoostedStats_output QubicConnection::receivePacketWithHeaderAs<QEarnGetBurnedAndBoostedStats_output>();
+template QEarnGetBurnedAndBoostedStatsPerEpoch_output QubicConnection::receivePacketWithHeaderAs<QEarnGetBurnedAndBoostedStatsPerEpoch_output>();
+
 template ExchangePublicPeers QubicConnection::receivePacketAs<ExchangePublicPeers>();
 
 template std::vector<Tick> QubicConnection::getLatestVectorPacketAs<Tick>();
+template std::vector<RespondOwnedAssets> QubicConnection::getLatestVectorPacketAs<RespondOwnedAssets>();
+template std::vector<RespondPossessedAssets> QubicConnection::getLatestVectorPacketAs<RespondPossessedAssets>();
+
+template std::vector<RespondAssets> QubicConnection::getLatestVectorPacketAs<RespondAssets>();
+template std::vector<RespondAssetsWithSiblings> QubicConnection::getLatestVectorPacketAs<RespondAssetsWithSiblings>();
+
+// MSVAULT
+template MsVaultGetBalanceOf_output QubicConnection::receivePacketWithHeaderAs<MsVaultGetBalanceOf_output>();
+template MsVaultGetReleaseStatus_output QubicConnection::receivePacketWithHeaderAs<MsVaultGetReleaseStatus_output>();
+template MsVaultGetVaults_output QubicConnection::receivePacketWithHeaderAs<MsVaultGetVaults_output>();
+template MsVaultGetVaultName_output QubicConnection::receivePacketWithHeaderAs<MsVaultGetVaultName_output>();
+template MsVaultGetRevenueInfo_output QubicConnection::receivePacketWithHeaderAs<MsVaultGetRevenueInfo_output>();
+template MsVaultGetFees_output QubicConnection::receivePacketWithHeaderAs<MsVaultGetFees_output>();
+template MsVaultGetVaultOwners_output QubicConnection::receivePacketWithHeaderAs<MsVaultGetVaultOwners_output>();
+
+// TESTING
+template QpiFunctionsOutput QubicConnection::receivePacketWithHeaderAs<QpiFunctionsOutput>();

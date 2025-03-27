@@ -1,18 +1,21 @@
-cmake_minimum_required(VERSION 3.1)
-project(qubic-cli C CXX)
-set (CMAKE_CXX_STANDARD 11)
+cmake_minimum_required(VERSION 3.12)
+project(qubic-cli CXX)
+set (CMAKE_CXX_STANDARD 17)
 SET(FILES ${CMAKE_SOURCE_DIR}/connection.cpp
 		  ${CMAKE_SOURCE_DIR}/keyUtils.cpp
 		  ${CMAKE_SOURCE_DIR}/nodeUtils.cpp
 		  ${CMAKE_SOURCE_DIR}/fileUpload.cpp
 		  ${CMAKE_SOURCE_DIR}/walletUtils.cpp
 		  ${CMAKE_SOURCE_DIR}/assetUtils.cpp
-		  ${CMAKE_SOURCE_DIR}/qubicLogParser.cpp
 		  ${CMAKE_SOURCE_DIR}/SCUtils.cpp
+		  ${CMAKE_SOURCE_DIR}/testUtils.cpp
 		  ${CMAKE_SOURCE_DIR}/quottery.cpp
 		  ${CMAKE_SOURCE_DIR}/qutil.cpp
 		  ${CMAKE_SOURCE_DIR}/qx.cpp
 		  ${CMAKE_SOURCE_DIR}/proposal.cpp
+		  ${CMAKE_SOURCE_DIR}/qearn.cpp
+		  ${CMAKE_SOURCE_DIR}/qvault.cpp
+		  ${CMAKE_SOURCE_DIR}/msvault.cpp
 )
 SET(HEADER_FILES
 	K12AndKeyUtil.h
@@ -27,14 +30,18 @@ SET(HEADER_FILES
 	logger.h
 	nodeUtils.h
 	prompt.h
-	qubicLogParser.h
 	quottery.h
 	qutil.h
 	sanityCheck.h
 	structs.h
 	utils.h
 	walletUtils.h
+	testUtils.h
 	proposal.h
+	qx.h
+	qearn.h
+	qvault.h
+	msvault.h
 )
 ADD_EXECUTABLE(qubic-cli main.cpp ${FILES} ${HEADER_FILES})
 ADD_EXECUTABLE(qubic-broadcaster broadcaster.cpp ${FILES} ${HEADER_FILES})

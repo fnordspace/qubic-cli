@@ -1,3 +1,4 @@
+#include <array>
 #include "stdio.h"
 #include "structs.h"
 #include "global.h"
@@ -12,11 +13,19 @@
 #include "qutil.h"
 #include "qx.h"
 #include "proposal.h"
+#include "qearn.h"
+#include "qvault.h"
+#include "msvault.h"
+#include "testUtils.h"
 
 int run(int argc, char* argv[])
 {
+#ifdef __aarch64__
+    LOG("WARNING: qubic-cli (aarch64) is EXPERIMENTAL version, please use it with caution\n");
+#endif
     parseArgument(argc, argv);
-    switch (g_cmd){
+    switch (g_cmd)
+    {
         case SHOW_KEYS:
             sanityCheckSeed(g_seed);
             printWalletInfo(g_seed);
@@ -39,6 +48,10 @@ int run(int argc, char* argv[])
             sanityCheckNode(g_nodeIp, g_nodePort);
             printOwnedAsset(g_nodeIp, g_nodePort, g_requestedIdentity);
             printPossessionAsset(g_nodeIp, g_nodePort, g_requestedIdentity);
+            break;
+        case QUERY_ASSETS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            printAssetRecords(g_nodeIp, g_nodePort, g_paramString1, g_paramString2);
             break;
         case SEND_COIN:
             sanityCheckNode(g_nodeIp, g_nodePort);
@@ -109,7 +122,7 @@ int run(int argc, char* argv[])
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
             sanityCheckNumberOfUnit(g_qx_issue_asset_number_of_unit);
-            sanityCheckValidString(g_qx_issue_asset_name);
+            sanityCheckValidAssetName(g_qx_issue_asset_name);
             sanityCheckValidString(g_qx_issue_unit_of_measurement);
             sanityCheckNumberOfDecimal(g_qx_issue_asset_num_decimal);
             qxIssueAsset(g_nodeIp, g_nodePort, g_seed,
@@ -123,7 +136,7 @@ int run(int argc, char* argv[])
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
             sanityCheckNumberOfUnit(g_qx_asset_transfer_amount);
-            sanityCheckValidString(g_qx_asset_transfer_asset_name);
+            sanityCheckValidAssetName(g_qx_asset_transfer_asset_name);
             sanityCheckValidString(g_qx_asset_transfer_issuer_in_hex);
             sanityCheckIdentity(g_qx_asset_transfer_new_owner_identity);
             qxTransferAsset(g_nodeIp, g_nodePort, g_seed,
@@ -136,18 +149,28 @@ int run(int argc, char* argv[])
         case QX_ORDER:
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
+            sanityCheckValidAssetName(g_qx_asset_name);
             sanityCheckValidString(g_qx_command_1);
             sanityCheckValidString(g_qx_command_2);
-            if (strcmp(g_qx_command_1, "add") == 0){
-                if (strcmp(g_qx_command_2, "bid") == 0){
+            if (strcmp(g_qx_command_1, "add") == 0)
+            {
+                if (strcmp(g_qx_command_2, "bid") == 0)
+                {
                     qxAddToBidOrder(g_nodeIp, g_nodePort, g_seed, g_qx_asset_name, g_qx_issuer, g_qx_price, g_qx_number_of_share, g_offsetScheduledTick);
-                } else if (strcmp(g_qx_command_2, "ask") == 0){
+                }
+                else if (strcmp(g_qx_command_2, "ask") == 0)
+                {
                     qxAddToAskOrder(g_nodeIp, g_nodePort, g_seed, g_qx_asset_name, g_qx_issuer, g_qx_price, g_qx_number_of_share, g_offsetScheduledTick);
                 }
-            } else if (strcmp(g_qx_command_1, "remove") == 0){
-                if (strcmp(g_qx_command_2, "bid") == 0){
+            }
+            else if (strcmp(g_qx_command_1, "remove") == 0)
+            {
+                if (strcmp(g_qx_command_2, "bid") == 0)
+                {
                     qxRemoveToBidOrder(g_nodeIp, g_nodePort, g_seed, g_qx_asset_name, g_qx_issuer, g_qx_price, g_qx_number_of_share, g_offsetScheduledTick);
-                } else if (strcmp(g_qx_command_2, "ask") == 0){
+                }
+                else if (strcmp(g_qx_command_2, "ask") == 0)
+                {
                     qxRemoveToAskOrder(g_nodeIp, g_nodePort, g_seed, g_qx_asset_name, g_qx_issuer, g_qx_price, g_qx_number_of_share, g_offsetScheduledTick);
                 }
             }
@@ -156,19 +179,37 @@ int run(int argc, char* argv[])
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckValidString(g_qx_command_1);
             sanityCheckValidString(g_qx_command_2);
-            if (strcmp(g_qx_command_1, "entity") == 0){
-                if (strcmp(g_qx_command_2, "bid") == 0){
+            if (strcmp(g_qx_command_1, "entity") == 0)
+            {
+                if (strcmp(g_qx_command_2, "bid") == 0)
+                {
                     qxGetEntityBidOrder(g_nodeIp, g_nodePort, g_qx_issuer, g_qx_offset);
-                } else if (strcmp(g_qx_command_2, "ask") == 0){
+                }
+                else if (strcmp(g_qx_command_2, "ask") == 0)
+                {
                     qxGetEntityAskOrder(g_nodeIp, g_nodePort, g_qx_issuer, g_qx_offset);
                 }
-            } else if (strcmp(g_qx_command_1, "asset") == 0){
-                if (strcmp(g_qx_command_2, "bid") == 0){
+            }
+            else if (strcmp(g_qx_command_1, "asset") == 0)
+            {
+                sanityCheckValidAssetName(g_qx_asset_name);
+                if (strcmp(g_qx_command_2, "bid") == 0)
+                {
                     qxGetAssetBidOrder(g_nodeIp, g_nodePort, g_qx_asset_name, g_qx_issuer, g_qx_offset);
-                } else if (strcmp(g_qx_command_2, "ask") == 0){
+                }
+                else if (strcmp(g_qx_command_2, "ask") == 0)
+                {
                     qxGetAssetAskOrder(g_nodeIp, g_nodePort, g_qx_asset_name, g_qx_issuer, g_qx_offset);
                 }
             }
+            break;
+        case QX_TRANSFER_MANAGEMENT_RIGHTS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            sanityCheckValidAssetName(g_qx_asset_name);
+            sanityCheckIdentity(g_qx_issuer);
+            sanityCheckNumberOfUnit(g_qx_number_of_share);
+            qxTransferAssetManagementRights(g_nodeIp, g_nodePort, g_seed, g_qx_asset_name, g_qx_issuer, g_contract_index, g_qx_number_of_share, g_offsetScheduledTick);
             break;
         case GET_COMP_LIST:
             sanityCheckNode(g_nodeIp, g_nodePort);
@@ -178,19 +219,15 @@ int run(int argc, char* argv[])
             sanityCheckNode(g_nodeIp, g_nodePort);
             getNodeIpList(g_nodeIp, g_nodePort);
             break;
-        case GET_LOG_FROM_NODE:
-            sanityCheckNode(g_nodeIp, g_nodePort);
-            getLogFromNode(g_nodeIp, g_nodePort, g_get_log_passcode);
-            break;
         case UPLOAD_FILE:
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
-            uploadFile(g_nodeIp, g_nodePort, g_file_path, g_seed, g_offsetScheduledTick);
+            uploadFile(g_nodeIp, g_nodePort, g_file_path, g_seed, g_offsetScheduledTick, g_compress_tool);
             break;
         case DOWNLOAD_FILE:
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
-            downloadFile(g_nodeIp, g_nodePort, g_requestedTxId, g_file_path);
+            downloadFile(g_nodeIp, g_nodePort, g_requestedTxId, g_file_path, g_compress_tool);
             break;
         case DUMP_SPECTRUM_FILE:
             sanityFileExist(g_dump_binary_file_input);
@@ -263,17 +300,16 @@ int run(int argc, char* argv[])
         case TOOGLE_MAIN_AUX:
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
-            sanityCheckMainAuxStatus(g_toogle_main_aux_0);
-            sanityCheckMainAuxStatus(g_toogle_main_aux_1);
-            toogleMainAux(g_nodeIp, g_nodePort, g_seed, g_requestedSpecialCommand, g_toogle_main_aux_0, g_toogle_main_aux_1);
+            sanityCheckMainAuxStatus(g_toggle_main_aux_0);
+            sanityCheckMainAuxStatus(g_toggle_main_aux_1);
+            toggleMainAux(g_nodeIp, g_nodePort, g_seed, g_toggle_main_aux_0, g_toggle_main_aux_1);
             break;
         case SET_SOLUTION_THRESHOLD:
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
             checkValidEpoch(g_set_solution_threshold_epoch);
             checkValidSolutionThreshold(g_set_solution_threshold_value);
-            setSolutionThreshold(g_nodeIp, g_nodePort, g_seed,
-                                 g_requestedSpecialCommand, g_set_solution_threshold_epoch, g_set_solution_threshold_value);
+            setSolutionThreshold(g_nodeIp, g_nodePort, g_seed, g_set_solution_threshold_epoch, g_set_solution_threshold_value);
             break;
         case SEND_SPECIAL_COMMAND:
         case REFRESH_PEER_LIST:
@@ -287,8 +323,7 @@ int run(int argc, char* argv[])
         case GET_MINING_SCORE_RANKING:
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
-            sanityCheckSpecialCommand(g_requestedSpecialCommand);
-            sendSpecialCommandGetMiningScoreRanking(g_nodeIp, g_nodePort, g_seed, g_requestedSpecialCommand);
+            getMiningScoreRanking(g_nodeIp, g_nodePort, g_seed);
             break;
         case GET_VOTE_COUNTER_TX:
             sanityCheckNode(g_nodeIp, g_nodePort);
@@ -298,6 +333,12 @@ int run(int argc, char* argv[])
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
             syncTime(g_nodeIp, g_nodePort, g_seed);
+            break;
+        case SET_LOGGING_MODE:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            sanityCheckLoggingMode(g_loggingMode);
+            setLoggingMode(g_nodeIp, g_nodePort, g_seed, g_loggingMode);
             break;
         case QUTIL_SEND_TO_MANY_V1:
             sanityCheckNode(g_nodeIp, g_nodePort);
@@ -309,6 +350,11 @@ int run(int argc, char* argv[])
             sanityCheckNode(g_nodeIp, g_nodePort);
             sanityCheckSeed(g_seed);
             qutilBurnQubic(g_nodeIp, g_nodePort, g_seed, g_TxAmount, g_offsetScheduledTick);
+            break;
+        case QUTIL_SEND_TO_MANY_BENCHMARK:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            qutilSendToManyBenchmark(g_nodeIp, g_nodePort, g_seed, g_qutil_sendtomanybenchmark_destination_count, g_qutil_sendtomanybenchmark_num_transfers_each, g_offsetScheduledTick);
             break;
         case GQMPROP_SET_PROPOSAL:
             sanityCheckNode(g_nodeIp, g_nodePort);
@@ -380,7 +426,193 @@ int run(int argc, char* argv[])
             sanityCheckNode(g_nodeIp, g_nodePort);
             ccfGetLatestTransfers(g_nodeIp, g_nodePort);
             break;
-
+        case QEARN_LOCK:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            qearnLock(g_nodeIp, g_nodePort, g_seed, g_qearn_lock_amount, g_offsetScheduledTick);
+            break;
+        case QEARN_UNLOCK:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            qearnUnlock(g_nodeIp, g_nodePort, g_seed, g_qearn_unlock_amount, g_qearn_locked_epoch, g_offsetScheduledTick);
+            break;
+        case QEARN_GET_INFO_PER_EPOCH:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            qearnGetInfoPerEpoch(g_nodeIp, g_nodePort, g_qearn_getinfo_epoch);
+            break;
+        case QEARN_GET_USER_LOCKED_INFO:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            qearnGetUserLockedInfo(g_nodeIp, g_nodePort, g_requestedIdentity, g_qearn_getinfo_epoch);
+            break;
+        case QEARN_GET_STATE_OF_ROUND:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            qearnGetStateOfRound(g_nodeIp, g_nodePort, g_qearn_getinfo_epoch);
+            break;
+        case QEARN_GET_USER_LOCK_STATUS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            qearnGetUserLockedStatus(g_nodeIp, g_nodePort, g_requestedIdentity);
+            break;
+        case QEARN_GET_UNLOCKING_STATUS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            qearnGetEndedStatus(g_nodeIp, g_nodePort, g_requestedIdentity);
+            break;
+        case QEARN_GET_STATS_PER_EPOCH:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            qearnGetStatsPerEpoch(g_nodeIp, g_nodePort, g_qearn_getstats_epoch);
+            break;
+        case QEARN_GET_BURNED_AND_BOOSTED_STATS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            qearnGetBurnedAndBoostedStats(g_nodeIp, g_nodePort);
+            break;
+        case QEARN_GET_BURNED_AND_BOOSTED_STATS_PER_EPOCH:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            qearnGetBurnedAndBoostedStatsPerEpoch(g_nodeIp, g_nodePort, g_qearn_getstats_epoch);
+            break;
+        case QVAULT_SUBMIT_AUTH_ADDRESS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            submitAuthAddress(g_nodeIp, g_nodePort, g_seed, g_offsetScheduledTick, g_qvaultIdentity);
+            break;
+        case QVAULT_CHANGE_AUTH_ADDRESS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            changeAuthAddress(g_nodeIp, g_nodePort, g_seed, g_offsetScheduledTick, g_qvault_numberOfChangedAddress);
+            break;
+        case QVAULT_SUBMIT_FEES:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            submitFees(g_nodeIp, g_nodePort, g_seed, g_offsetScheduledTick, g_qvault_newQCAPHolder_fee, g_qvault_newreinvesting_fee, g_qvault_newdev_fee);
+            break;
+        case QVAULT_CHANGE_FEES:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            changeFees(g_nodeIp, g_nodePort, g_seed, g_offsetScheduledTick, g_qvault_newQCAPHolder_fee, g_qvault_newreinvesting_fee, g_qvault_newdev_fee);
+            break;
+        case QVAULT_SUBMIT_REINVESTING_ADDRESS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            submitReinvestingAddress(g_nodeIp, g_nodePort, g_seed, g_offsetScheduledTick, g_qvaultIdentity);
+            break;
+        case QVAULT_CHANGE_REINVESTING_ADDRESS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            changeReinvestingAddress(g_nodeIp, g_nodePort, g_seed,  g_offsetScheduledTick, g_qvaultIdentity);
+            break;
+        case QVAULT_SUBMIT_ADMIN_ADDRESS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            submitAdminAddress(g_nodeIp, g_nodePort, g_seed, g_offsetScheduledTick, g_qvaultIdentity);
+            break;
+        case QVAULT_CHANGE_ADMIN_ADDRESS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            changeAdminAddress(g_nodeIp, g_nodePort, g_seed,  g_offsetScheduledTick, g_qvaultIdentity);
+            break;
+        case QVAULT_GET_DATA:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            getData(g_nodeIp, g_nodePort);
+            break;
+        case QVAULT_SUBMIT_BANNED_ADDRESS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            submitBannedAddress(g_nodeIp, g_nodePort, g_seed, g_offsetScheduledTick, g_qvaultIdentity);
+            break;
+        case QVAULT_SAVE_BANNED_ADDRESS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            saveBannedAddress(g_nodeIp, g_nodePort, g_seed,  g_offsetScheduledTick, g_qvaultIdentity);
+            break;
+        case QVAULT_SUBMIT_UNBANNED_ADDRESS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            submitUnbannedannedAddress(g_nodeIp, g_nodePort, g_seed, g_offsetScheduledTick, g_qvaultIdentity);
+            break;
+        case QVAULT_SAVE_UNBANNED_ADDRESS:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            saveUnbannedAddress(g_nodeIp, g_nodePort, g_seed,  g_offsetScheduledTick, g_qvaultIdentity);
+            break;
+        // MSVAULT
+        case MSVAULT_REGISTER_VAULT_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            msvaultRegisterVault(g_nodeIp, g_nodePort, g_seed,
+                g_msVaultRequiredApprovals, g_msVaultVaultName,
+                g_msVaultOwnersCommaSeparated,
+                g_offsetScheduledTick);
+            break;
+        }
+        case MSVAULT_DEPOSIT_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            msvaultDeposit(g_nodeIp,g_nodePort,g_seed,
+                           g_msVaultID, g_TxAmount, g_offsetScheduledTick);
+            break;
+        }
+        case MSVAULT_RELEASE_TO_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            sanityCheckIdentity(g_msVaultDestination);
+            msvaultReleaseTo(g_nodeIp,g_nodePort,g_seed,
+                             g_msVaultID, g_TxAmount, g_msVaultDestination,
+                             g_offsetScheduledTick);
+            break;
+        }
+        case MSVAULT_RESET_RELEASE_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            msvaultResetRelease(g_nodeIp,g_nodePort,g_seed,
+                                g_msVaultID, g_offsetScheduledTick);
+            break;
+        }
+        case MSVAULT_GET_VAULTS_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckIdentity(g_msVaultPublicId);
+            msvaultGetVaults(g_nodeIp,g_nodePort,g_msVaultPublicId);
+            break;
+        }
+        case MSVAULT_GET_RELEASE_STATUS_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            msvaultGetReleaseStatus(g_nodeIp,g_nodePort,g_msVaultID);
+            break;
+        }
+        case MSVAULT_GET_BALANCE_OF_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            msvaultGetBalanceOf(g_nodeIp,g_nodePort,g_msVaultID);
+            break;
+        }
+        case MSVAULT_GET_VAULT_NAME_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            msvaultGetVaultName(g_nodeIp,g_nodePort,g_msVaultID);
+            break;
+        }
+        case MSVAULT_GET_REVENUE_INFO_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            msvaultGetRevenueInfo(g_nodeIp,g_nodePort);
+            break;
+        }
+        case MSVAULT_GET_FEES_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            msvaultGetFees(g_nodeIp, g_nodePort);
+            break;
+        }
+        case MSVAULT_GET_OWNERS_CMD:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            msvaultGetVaultOwners(g_nodeIp, g_nodePort, g_msVaultID);
+            break;
+        }
+        case TEST_QPI_FUNCTIONS_OUTPUT:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            testQpiFunctionsOutput(g_nodeIp, g_nodePort, g_seed, g_offsetScheduledTick);
+            break;
+        }
+        case TEST_QPI_FUNCTIONS_OUTPUT_PAST:
+        {
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            testQpiFunctionsOutputPast(g_nodeIp, g_nodePort);
+            break;
+        }
         default:
             printf("Unexpected command!\n");
             break;

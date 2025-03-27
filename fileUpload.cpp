@@ -7,6 +7,7 @@
 #include <memory>
 #include <thread>
 #include <stdexcept>
+
 #include "structs.h"
 #include "connection.h"
 #include "nodeUtils.h"
@@ -14,7 +15,6 @@
 #include "K12AndKeyUtil.h"
 #include "keyUtils.h"
 #include "walletUtils.h"
-#include "qubicLogParser.h"
 #include <fstream>
 #include <fcntl.h>
 
@@ -77,10 +77,13 @@ bool uploadHeader(QCPtr& qc, const char* seed, size_t fileSize, int numberOfFrag
         ret = _GetTxInfo(qc, txHashQubic);
         Q_SLEEP(1000);
     }
-    if (ret == 0){
+    if (ret == 0)
+    {
         LOG("Transaction %s is included\n", txHashQubic);
         return true;
-    } else {
+    }
+    else
+    {
         LOG("Transaction %s is NOT included.\n", txHashQubic);
         memset(txHash, 0, 32);
         return false;
@@ -139,23 +142,96 @@ bool uploadFragment(QCPtr& qc, const char* seed, const uint64_t fragmentId,
         ret = _GetTxInfo(qc, txHashQubic);
         Q_SLEEP(1000);
     }
-    if (ret == 0){
+    if (ret == 0)
+    {
         LOG("Transaction %s is included\n", txHashQubic);
         return true;
-    } else {
+    }
+    else
+    {
         LOG("Transaction %s is NOT included.\n", txHashQubic);
         memset(outTxHash, 0, 32);
         return false;
     }
 }
 
-void uploadFile(const char* nodeIp, const int nodePort, const char* filePath, const char* seed, const uint32_t scheduledTickOffset)
+std::string compressFileWithTool(const char* inputFile, const char* tool)
 {
+    // Cut off the extension if there is any
+    std::string filePathStr = inputFile;
+    std::string compressFileName;
+    size_t lastDot = filePathStr.find_last_of('.');
+    if (lastDot != std::string::npos)
+    {
+        compressFileName = filePathStr.substr(0, lastDot);
+    }
+
+    // Add extension depend on the commmand
+    std::string commandWithArgument;
+    std::string commandStr = tool;
+    if (commandStr.find_last_of("zip") != std::string::npos)
+    {
+        compressFileName = compressFileName + ".zip";
+        commandWithArgument = "zip -9 " + compressFileName + " " + filePathStr;
+    }
+    else if (commandStr.find_last_of("tar") != std::string::npos)
+    {
+        compressFileName = compressFileName + ".tar.gz";
+        commandWithArgument = "tar -czvf " + compressFileName + " " + filePathStr;
+    }
+
+    LOG("Execute command: %s.\n", commandWithArgument.c_str());
+    int sts = system(commandWithArgument.c_str());
+    if (sts != 0)
+    {
+        LOG("Execute command FAILED: %.\n");
+        return "";
+    }
+    return compressFileName;
+}
+
+int decompressFileWithTool(const char* inputFile, const char* tool)
+{
+    // Cut off the extension if there is any
+    std::string decompressFileName = inputFile;
+
+    // Add extension based on the command
+    std::string commandWithArgument;
+    std::string commandStr = tool;
+    if (commandStr.find("zip") != std::string::npos)
+    {
+        commandWithArgument = "unzip " + decompressFileName;
+    }
+    else if (commandStr.find("tar") != std::string::npos)
+    {
+        commandWithArgument = "tar -xzvf " + decompressFileName;
+    }
+
+    LOG("Execute command: %s.\n", commandWithArgument.c_str());
+    int sts = system(commandWithArgument.c_str());
+    if (sts != 0)
+    {
+        LOG("Execute command FAILED: %d.\n", sts);
+        return 1;
+    }
+    return 0;
+}
+
+void uploadFile(const char* nodeIp, const int nodePort, const char* filePath, const char* seed, const uint32_t scheduledTickOffset, const char* compressTool)
+{
+    std::string filePathStr = filePath;
+    // Run the compression if there is any provided
+    if (compressTool)
+    {
+        filePathStr = compressFileWithTool(filePath, compressTool);
+    }
+
+    // Start to upload the file
     size_t fileSize = 0;
     std::string extension;
-    std::ifstream in(filePath, std::ifstream::ate | std::ifstream::binary);
+    std::ifstream in(filePathStr, std::ifstream::ate | std::ifstream::binary);
     fileSize = in.tellg();
-    extension = getExtension(filePath);
+    extension = getExtension(filePathStr);
     if (fileSize == 0)
     {
         LOG("File size is 0. Exit.\n");
@@ -172,7 +248,7 @@ void uploadFile(const char* nodeIp, const int nodePort, const char* filePath, co
     auto qc = make_qc(nodeIp, nodePort);
     std::vector<uint8_t> fragmentData;
     fragmentData.resize(fileSize);
-    FILE* f = fopen(filePath, "rb");
+    FILE* f = fopen(filePathStr.c_str(), "rb");
     fread(fragmentData.data(), 1, fileSize, f);
     fclose(f);
 
@@ -224,15 +300,18 @@ void uploadFile(const char* nodeIp, const int nodePort, const char* filePath, co
     for (int i = 0; i < numberOfFragments; i++)
     {
         getIdentityFromPublicKey(fragmentTxDigests[i].ptr, qubicHash, true);
-        if (i != numberOfFragments - 1){
+        if (i != numberOfFragments - 1)
+        {
             LOG("Fragment #%d: %s\n", i, qubicHash);
-        } else {
+        }
+        else
+        {
             LOG("Trailer: %s\n", qubicHash);
         }
     }
 }
 
-void downloadFile(const char* nodeIp, const int nodePort, const char* trailer, const char* outFilePath)
+void downloadFile(const char* nodeIp, const int nodePort, const char* trailer, const char* outFilePath, const char* decompressTool)
 {
     std::vector<uint8_t> fileData;
     uint8_t buffer[1024];
@@ -244,7 +323,8 @@ void downloadFile(const char* nodeIp, const int nodePort, const char* trailer, c
         ret = _GetInputDataFromTxHash(qc, trailer, buffer, dataSize);
         Q_SLEEP(1000);
     }
-    if (ret == 1){
+    if (ret == 1)
+    {
         LOG("Cannot find trailer %s is included\n", trailer);
         return;
     }
@@ -310,4 +390,11 @@ void downloadFile(const char* nodeIp, const int nodePort, const char* trailer, c
     fwrite(fileData.data(), 1, fileData.size(), f);
     fclose(f);
     LOG("Data have been written to %s\n", outPath.c_str());
+
+    // Run the decompression if there is any provided
+    if (decompressTool)
+    {
+        decompressFileWithTool(outPath.c_str(), decompressTool);
+    }
+
 }

@@ -1,5 +1,7 @@
 #include <cstdint>
 #include <cstring>
+#include <stdexcept>
+
 #include "structs.h"
 #include "walletUtils.h"
 #include "keyUtils.h"
@@ -30,8 +32,10 @@
 #define QX_ADD_BID_ORDER 6
 #define QX_REMOVE_ASK_ORDER 7
 #define QX_REMOVE_BID_ORDER 8
+#define QX_TRANSFER_SHARE_MANAGEMENT_RIGHTS 9
 
-void getQxFees(const char* nodeIp, const int nodePort, QxFees_output& result){
+void getQxFees(const char* nodeIp, const int nodePort, QxFees_output& result)
+{
     auto qc = make_qc(nodeIp, nodePort);
     struct {
         RequestResponseHeader header;
@@ -44,27 +48,19 @@ void getQxFees(const char* nodeIp, const int nodePort, QxFees_output& result){
     packet.rcf.inputType = QX_GET_FEE;
     packet.rcf.contractIndex = QX_CONTRACT_INDEX;
     qc->sendData((uint8_t *) &packet, packet.header.size());
-    std::vector<uint8_t> buffer;
-    qc->receiveDataAll(buffer);
-    uint8_t* data = buffer.data();
-    int recvByte = buffer.size();
-    int ptr = 0;
-    memset(&result, 0, sizeof(result));
-    while (ptr < recvByte)
-    {
-        auto header = (RequestResponseHeader*)(data+ptr);
-        if (header->type() == RespondContractFunction::type()){
-            if (recvByte - ptr - sizeof(RequestResponseHeader) >= sizeof(QxFees_output)){
-                auto fees = (QxFees_output*)(data + ptr + sizeof(RequestResponseHeader));
-                result = *fees;
-            }
-        }
-        ptr+= header->size();
-    }
 
+    try
+    {
+        result = qc->receivePacketWithHeaderAs<QxFees_output>();
+    }
+    catch (std::logic_error& e)
+    {
+        memset(&result, 0, sizeof(result));
+    }
 }
 
-void printQxFee(const char* nodeIp, const int nodePort){
+void printQxFee(const char* nodeIp, const int nodePort)
+{
     QxFees_output result;
     getQxFees(nodeIp, nodePort, result);
     LOG("Asset issuance fee: %u\n", result.assetIssuanceFee);
@@ -107,10 +103,13 @@ void qxIssueAsset(const char* nodeIp, int nodePort,
     memcpy(packet.transaction.destinationPublicKey, destPublicKey, 32);
     packet.transaction.amount = 1000000000;
     uint32_t scheduledTick = 0;
-    if (scheduledTickOffset < 50000){
+    if (scheduledTickOffset < 50000)
+    {
         uint32_t currentTick = getTickNumberFromNode(qc);
         scheduledTick = currentTick + scheduledTickOffset;
-    } else {
+    }
+    else
+    {
         scheduledTick = scheduledTickOffset;
     }
     packet.transaction.tick = scheduledTick;
@@ -144,7 +143,6 @@ void qxIssueAsset(const char* nodeIp, int nodePort,
     printReceipt(packet.transaction, txHash, reinterpret_cast<const uint8_t *>(&packet.ia));
     LOG("run ./qubic-cli [...] -checktxontick %u %s\n", scheduledTick, txHash);
     LOG("to check your tx confirmation status\n");
-
 }
 
 void qxTransferAsset(const char* nodeIp, int nodePort,
@@ -168,7 +166,8 @@ void qxTransferAsset(const char* nodeIp, int nodePort,
     char assetNameU1[8] = {0};
 
     memcpy(assetNameU1, pAssetName, strlen(pAssetName));
-    if (strlen(pIssuerInQubicFormat) != 60){
+    if (strlen(pIssuerInQubicFormat) != 60)
+    {
         LOG("WARNING: Stop supporting hex format, please use qubic format 60-char length addresses\n");
         exit(0);
     }
@@ -220,7 +219,6 @@ void qxTransferAsset(const char* nodeIp, int nodePort,
     printReceipt(packet.transaction, txHash, reinterpret_cast<const uint8_t *>(&packet.ta));
     LOG("run ./qubic-cli [...] -checktxontick %u %s\n", scheduledTick, txHash);
     LOG("to check your tx confirmation status\n");
-
 }
 
 template <int functionNumber>
@@ -231,7 +229,6 @@ void qxOrderAction(const char* nodeIp, int nodePort,
                    const long long price,
                    const long long numberOfShares,
                    uint32_t scheduledTickOffset)
-
 {
     auto qc = make_qc(nodeIp, nodePort);
     uint8_t privateKey[32] = {0};
@@ -244,7 +241,8 @@ void qxOrderAction(const char* nodeIp, int nodePort,
     char txHash[128] = {0};
     char assetNameU1[8] = {0};
     memcpy(assetNameU1, pAssetName, strlen(pAssetName));
-    if (strlen(pIssuerInQubicFormat) != 60){
+    if (strlen(pIssuerInQubicFormat) != 60)
+    {
         LOG("WARNING: Stop supporting hex format, please use qubic format 60-char length addresses\n");
         exit(0);
     }
@@ -263,7 +261,8 @@ void qxOrderAction(const char* nodeIp, int nodePort,
     memcpy(packet.transaction.sourcePublicKey, sourcePublicKey, 32);
     memcpy(packet.transaction.destinationPublicKey, destPublicKey, 32);
     packet.transaction.amount = 1; // free
-    if (functionNumber == QX_ADD_BID_ORDER){
+    if (functionNumber == QX_ADD_BID_ORDER)
+    {
         packet.transaction.amount = price * numberOfShares;
     }
 
@@ -308,6 +307,27 @@ void qxOrderAction(const char* nodeIp, int nodePort,
     printReceipt(packet.transaction, txHash, reinterpret_cast<const uint8_t *>(&packet.qoa));
     LOG("run ./qubic-cli [...] -checktxontick %u %s\n", scheduledTick, txHash);
     LOG("to check your tx confirmation status\n");
+}
+
+void qxTransferAssetManagementRights(const char* nodeIp, int nodePort,
+    const char* seed,
+    const char* pAssetName,
+    const char* pIssuerInQubicFormat,
+    uint32_t newManagingContractIndex,
+    int64_t numberOfShares,
+    uint32_t scheduledTickOffset)
+{
+    qxTransferShareManagementRights_input v;
+    memset(&v, 0, sizeof(v));
+    getPublicKeyFromIdentity(pIssuerInQubicFormat, v.asset.issuer);
+    v.asset.assetName = 0;
+    memcpy(&v.asset.assetName, pAssetName, strlen(pAssetName));
+    v.newManagingContractIndex = newManagingContractIndex;
+    v.numberOfShares = numberOfShares;
+
+    LOG("\nSending tx for transferring management rights ...\n");
+    makeContractTransaction(nodeIp, nodePort, seed, QX_CONTRACT_INDEX, QX_TRANSFER_SHARE_MANAGEMENT_RIGHTS,
+        0, sizeof(v), (uint8_t*)&v, scheduledTickOffset);
 }
 
 void qxAddToAskOrder(const char* nodeIp, int nodePort,
@@ -358,14 +378,17 @@ void printAssetOrders(qxGetAssetOrder_output& orders)
 {
     int N = sizeof(orders) /sizeof(orders.orders[0]);
     LOG("Entity\t\tPrice\tNumberOfShares\n");
-    for (int i = 0; i < N; i++){
+    for (int i = 0; i < N; i++)
+    {
         if (!isZeroPubkey(orders.orders[i].entity))
         {
             char iden[120];
             memset(iden, 0, 120);
             getIdentityFromPublicKey(orders.orders[i].entity, iden, false);
             LOG("%s\t%lld\t%lld\n", iden, orders.orders[i].price, orders.orders[i].numberOfShares);
-        } else {
+        }
+        else
+        {
             break;
         }
     }
@@ -380,7 +403,8 @@ void qxGetAssetOrder(const char* nodeIp, int nodePort,
     uint8_t issuer[32] = {0};
     char assetNameU1[8] = {0};
     memcpy(assetNameU1, pAssetName, strlen(pAssetName));
-    if (strlen(pIssuer) != 60){
+    if (strlen(pIssuer) != 60)
+    {
         LOG("WARNING: Stop supporting hex format, please use qubic format 60-char length addresses\n");
         exit(0);
     }
@@ -402,22 +426,13 @@ void qxGetAssetOrder(const char* nodeIp, int nodePort,
     memcpy(&packet.qgao.assetName, assetNameU1, 8);
     packet.qgao.offset = offset;
     qc->sendData((uint8_t *) &packet, packet.header.size());
-    std::vector<uint8_t> buffer;
-    qc->receiveDataAll(buffer);
-    uint8_t* data = buffer.data();
-    int recvByte = buffer.size();
-    int ptr = 0;
-    while (ptr < recvByte)
+
+    try
     {
-        auto header = (RequestResponseHeader*)(data+ptr);
-        if (header->type() == RespondContractFunction::type()){
-            if (recvByte - ptr - sizeof(RequestResponseHeader) >= sizeof(qxGetAssetOrder_output)){
-                auto orders = (qxGetAssetOrder_output*)(data + ptr + sizeof(RequestResponseHeader));
-                printAssetOrders(*orders);
-            }
-        }
-        ptr+= header->size();
+        qxGetAssetOrder_output orders = qc->receivePacketWithHeaderAs<qxGetAssetOrder_output>();
+        printAssetOrders(orders);
     }
+    catch (std::logic_error& e) {}
 }
 
 void qxGetAssetAskOrder(const char* nodeIp, int nodePort,
@@ -440,7 +455,8 @@ void printEntityOrders(qxGetEntityOrder_output& orders)
 {
     int N = sizeof(orders) /sizeof(orders.orders[0]);
     LOG("Issuer\t\tAssetName\tPrice\tNumberOfShares\n");
-    for (int i = 0; i < N; i++){
+    for (int i = 0; i < N; i++)
+    {
         if (orders.orders[i].price ||
             orders.orders[i].numberOfShares)
         {
@@ -451,7 +467,9 @@ void printEntityOrders(qxGetEntityOrder_output& orders)
             if (orders.orders[i].assetName)
                 memcpy(assetName, &orders.orders[i].assetName, 8);
             LOG("%s\t%s\t%lld\t%lld\n", iden, assetName, orders.orders[i].price, orders.orders[i].numberOfShares);
-        } else {
+        }
+        else
+        {
             break;
         }
     }
@@ -463,7 +481,8 @@ void qxGetEntityOrder(const char* nodeIp, int nodePort,
                      const long long offset)
 {
     uint8_t entity[32] = {0};
-    if (strlen(pEntity) != 60){
+    if (strlen(pEntity) != 60)
+    {
         LOG("WARNING: Stop supporting hex format, please use qubic format 60-char length addresses\n");
         exit(0);
     }
@@ -484,22 +503,13 @@ void qxGetEntityOrder(const char* nodeIp, int nodePort,
     memcpy(packet.qgeo.entity, entity, 32);
     packet.qgeo.offset = offset;
     qc->sendData((uint8_t *) &packet, packet.header.size());
-    std::vector<uint8_t> buffer;
-    qc->receiveDataAll(buffer);
-    uint8_t* data = buffer.data();
-    int recvByte = buffer.size();
-    int ptr = 0;
-    while (ptr < recvByte)
+
+    try
     {
-        auto header = (RequestResponseHeader*)(data+ptr);
-        if (header->type() == RespondContractFunction::type()){
-            if (recvByte - ptr - sizeof(RequestResponseHeader) >= sizeof(qxGetEntityOrder_output)){
-                auto orders = (qxGetEntityOrder_output*)(data + ptr + sizeof(RequestResponseHeader));
-                printEntityOrders(*orders);
-            }
-        }
-        ptr+= header->size();
+        qxGetEntityOrder_output orders = qc->receivePacketWithHeaderAs<qxGetEntityOrder_output>();
+        printEntityOrders(orders);
     }
+    catch (std::logic_error& e) {}
 }
 
 void qxGetEntityAskOrder(const char* nodeIp, int nodePort,
