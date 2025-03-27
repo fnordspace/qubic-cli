@@ -150,6 +150,23 @@ static bool qubicSendData(char* ip, char *buffer, unsigned int size) {
         return false;
     }
 
+    printf("Connection established. Receiving initial message...\n");
+    char initialBuffer[32]; // Buffer to hold the expected initial message
+    ssize_t bytesReceived = recv(serverSocket, initialBuffer, sizeof(initialBuffer), 0);
+
+    if (bytesReceived == -1) {
+        perror("Error receiving initial message");
+        close(serverSocket);
+        return false;
+    } else if (bytesReceived != sizeof(initialBuffer)) {
+        printf("Received %zd bytes, expected %zu for initial message.\n", bytesReceived, sizeof(initialBuffer));
+        close(serverSocket);
+        return false;
+    } else {
+        printf("Received and discarded initial message (%zd bytes).\n", bytesReceived);
+        // You could potentially process the initialBuffer here if it contains any relevant information
+    }
+
     printf("Start Sending for readl\n");
     while (size) {
         int numberOfBytes = size;
@@ -163,6 +180,7 @@ static bool qubicSendData(char* ip, char *buffer, unsigned int size) {
     }
 
 
+    
     printf("closing  \n");
     close(serverSocket);
     printf("closed  \n");
