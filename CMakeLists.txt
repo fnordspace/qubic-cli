@@ -45,6 +45,7 @@ SET(HEADER_FILES
 )
 ADD_EXECUTABLE(qubic-cli main.cpp ${FILES} ${HEADER_FILES})
 ADD_EXECUTABLE(qubic-broadcaster broadcaster.cpp ${FILES} ${HEADER_FILES})
+ADD_EXECUTABLE(print_computorlist print_computorlist.cpp ${CMAKE_SOURCE_DIR}/keyUtils.cpp ${HEADER_FILES})
 ADD_LIBRARY(fourq-qubic SHARED fourq-qubic.cpp)
 set_property(TARGET fourq-qubic PROPERTY SOVERSION 1)
 target_compile_options(fourq-qubic PRIVATE -DBUILD_4Q_LIB)
