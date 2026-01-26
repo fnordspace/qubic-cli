@@ -8,27 +8,27 @@
 #define NUMBER_OF_COMPUTORS 676
 #define MAX_NUMBER_OF_SOLUTIONS 65536
 
-#pragma pack(push, 1)
 struct SystemFile
 {
-    int16_t  version;
-    uint16_t epoch;
-    uint32_t tick;
-    uint32_t initialTick;
-    uint32_t latestCreatedTick;
-    uint32_t latestLedTick;
+    int16_t  version;           // 2
+    uint16_t epoch;             // 2
+    uint32_t tick;              // 4
+    uint32_t initialTick;       // 4
+    uint32_t latestCreatedTick; // 4
+    uint32_t latestLedTick;     // 4  -> 20 bytes
 
-    uint16_t initialMillisecond;
-    uint8_t  initialSecond;
-    uint8_t  initialMinute;
-    uint8_t  initialHour;
-    uint8_t  initialDay;
-    uint8_t  initialMonth;
-    uint8_t  initialYear;
+    uint16_t initialMillisecond; // 2
+    uint8_t  initialSecond;      // 1
+    uint8_t  initialMinute;      // 1
+    uint8_t  initialHour;        // 1
+    uint8_t  initialDay;         // 1
+    uint8_t  initialMonth;       // 1
+    uint8_t  initialYear;        // 1  -> 8 bytes
 
-    uint64_t latestOperatorNonce;
+    uint64_t latestOperatorNonce; // 8 bytes
 
-    uint32_t numberOfSolutions;
+    uint32_t numberOfSolutions;  // 4
+    uint32_t _padding;           // 4 (compiler alignment for m256i)
     struct {
         uint8_t computorPublicKey[32];
         uint8_t miningSeed[32];
@@ -37,7 +37,6 @@ struct SystemFile
 
     uint8_t futureComputors[NUMBER_OF_COMPUTORS][32];
 };
-#pragma pack(pop)
 
 int main(int argc, char* argv[])
 {
