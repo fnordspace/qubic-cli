@@ -451,6 +451,12 @@ int run(int argc, char* argv[])
             sanityCheckSeed(g_seed);
             getExecutionFeeMultiplier(g_nodeIp, g_nodePort, g_seed);
             break;
+        case SET_SIGN_DIFF:
+        case GET_SIGN_DIFF:
+            sanityCheckNode(g_nodeIp, g_nodePort);
+            sanityCheckSeed(g_seed);
+            tickVoteSignatureTarget(g_nodeIp, g_nodePort, g_seed, g_cmd == SET_SIGN_DIFF, g_signDiffTarget, g_signDiffTick);
+            break;
         case GET_ORACLE_QUERY:
             sanityCheckNode(g_nodeIp, g_nodePort);
             processGetOracleQuery(g_nodeIp, g_nodePort, g_paramString1, g_paramString2);

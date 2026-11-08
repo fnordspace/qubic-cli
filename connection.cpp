@@ -345,6 +345,7 @@ template BroadcastComputors QubicConnection::receivePacketWithHeaderAs<Broadcast
 template RespondContractIPO QubicConnection::receivePacketWithHeaderAs<RespondContractIPO>();
 template std::vector<RespondActiveIPO> QubicConnection::getLatestVectorPacketAs<RespondActiveIPO>();
 template SpecialCommandExecutionFeeMultiplierRequestAndResponse QubicConnection::receivePacketWithHeaderAs<SpecialCommandExecutionFeeMultiplierRequestAndResponse>();
+template SpecialCommandTickVoteSignatureTargetRequestAndResponse QubicConnection::receivePacketWithHeaderAs<SpecialCommandTickVoteSignatureTargetRequestAndResponse>();
 template RespondedEntity QubicConnection::receivePacketWithHeaderAs<RespondedEntity>();
 // QUOTTERY
 template qtryBasicInfo_output QubicConnection::receivePacketWithHeaderAs<qtryBasicInfo_output>();

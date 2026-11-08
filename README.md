@@ -144,6 +144,10 @@ Commands:
 		Set the multiplier for the conversion of raw execution time to contract execution fees to ( NUMERATOR / DENOMINATOR ), valid seed and node ip/port are required.
 	-getexecutionfeemultiplier
 		Get the current multiplier for the conversion of raw execution time to contract execution fees, valid seed and node ip/port are required.
+	-setsigndiff <NEW_DIFF> <TRIGGER_TICK>
+		From TRIGGER_TICK on, sign and verify tick votes with signature target NEW_DIFF (1 to 0xFFFFFFFE, decimal or 0x hex; lower is harder). TRIGGER_TICK must be at least 50 ticks ahead of the node. Valid seed and node ip/port are required.
+	-getsigndiff
+		Get the tick vote signature target setting of the node, valid seed and node ip/port are required.
 
 [ORACLE COMMANDS]
 	-getoraclequery <...>

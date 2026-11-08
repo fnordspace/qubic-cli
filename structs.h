@@ -202,6 +202,8 @@ enum COMMAND
     SHAREHOLDER_GET_VOTING_RESULTS,
     SET_EXECUTION_FEE_MULTIPLIER,
     GET_EXECUTION_FEE_MULTIPLIER,
+    SET_SIGN_DIFF,
+    GET_SIGN_DIFF,
     GET_ORACLE_QUERY,
     GET_ORACLE_SUBSCRIPTION,
     SEND_ORACLE_QUERY_TX,
@@ -934,6 +936,22 @@ struct SpecialCommandExecutionFeeMultiplierRequestAndResponse
     unsigned long long everIncreasingNonceAndCommandType;
     unsigned long long multiplierNumerator;
     unsigned long long multiplierDenominator;
+
+    static constexpr unsigned char type()
+    {
+        return 255;
+    }
+};
+
+// Request of the set command (targetBeforeSwitch ignored) and response of the set and get commands.
+// From switchTick on, the node signs and verifies tick votes with newTarget.
+struct SpecialCommandTickVoteSignatureTargetRequestAndResponse
+{
+    unsigned long long everIncreasingNonceAndCommandType;
+    unsigned int targetBeforeSwitch;
+    unsigned int newTarget;
+    unsigned int switchTick;
+    unsigned int padding;
 
     static constexpr unsigned char type()
     {

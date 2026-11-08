@@ -38,3 +38,4 @@ void broadcastCompChat(const char* nodeIp, const int nodePort, const char* seed,
 void saveSnapshot(const char* nodeIp, const int nodePort, const char* seed);
 void setExecutionFeeMultiplier(const char* nodeIp, const int nodePort, const char* seed, unsigned long long multiplierNumerator, unsigned long long multiplierDenominator);
 void getExecutionFeeMultiplier(const char* nodeIp, const int nodePort, const char* seed);
+void tickVoteSignatureTarget(const char* nodeIp, const int nodePort, const char* seed, bool set, uint32_t newTarget, uint32_t switchTick);

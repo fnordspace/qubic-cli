@@ -2489,3 +2489,74 @@ void getExecutionFeeMultiplier(const char* nodeIp, const int nodePort, const cha
         LOG("Failed to get execution fee multiplier\n");
     }
 }
+
+static void printTickVoteSignatureTarget(const char* label, uint32_t target)
+{
+    // 64-bit: target + 1 wraps to 0 in 32 bits for 0xFFFFFFFF
+    LOG("- %s: 0x%08X (~%" PRIu64 " signing operations per ID)\n", label, target, (1ULL << 32) / ((uint64_t)target + 1));
+}
+
+void tickVoteSignatureTarget(const char* nodeIp, const int nodePort, const char* seed, bool set, uint32_t newTarget, uint32_t switchTick)
+{
+    uint8_t privateKey[32] = { 0 };
+    uint8_t sourcePublicKey[32] = { 0 };
+    uint8_t subseed[32] = { 0 };
+    uint8_t digest[32] = { 0 };
+    uint8_t signature[64] = { 0 };
+
+    struct {
+        RequestResponseHeader header;
+        SpecialCommandTickVoteSignatureTargetRequestAndResponse cmd;
+        uint8_t signature[64];
+    } packet;
+    memset(&packet.cmd, 0, sizeof(packet.cmd));
+    packet.header.setSize(sizeof(packet));
+    packet.header.randomizeDejavu();
+    packet.header.setType(PROCESS_SPECIAL_COMMAND);
+    uint64_t curTime = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    uint64_t commandByte = (uint64_t)(set ? SPECIAL_COMMAND_SET_TICK_VOTE_SIGNATURE_TARGET : SPECIAL_COMMAND_GET_TICK_VOTE_SIGNATURE_TARGET) << 56;
+    packet.cmd.everIncreasingNonceAndCommandType = commandByte | curTime;
+    packet.cmd.newTarget = newTarget;
+    packet.cmd.switchTick = switchTick;
+
+    getSubseedFromSeed((uint8_t*)seed, subseed);
+    getPrivateKeyFromSubSeed(subseed, privateKey);
+    getPublicKeyFromPrivateKey(privateKey, sourcePublicKey);
+    KangarooTwelve((unsigned char*)&packet.cmd,
+        sizeof(packet.cmd),
+        digest,
+        32);
+    sign(subseed, sourcePublicKey, digest, signature);
+    memcpy(packet.signature, signature, 64);
+    auto qc = make_qc(nodeIp, nodePort);
+    qc->sendData(packet);
+
+    SpecialCommandTickVoteSignatureTargetRequestAndResponse response;
+    try
+    {
+        response = qc->receivePacketWithHeaderAs<SpecialCommandTickVoteSignatureTargetRequestAndResponse>();
+    }
+    catch (std::logic_error)
+    {
+        memset(&response, 0, sizeof(SpecialCommandTickVoteSignatureTargetRequestAndResponse));
+    }
+
+    if (response.everIncreasingNonceAndCommandType != packet.cmd.everIncreasingNonceAndCommandType)
+    {
+        LOG("Failed to %s tick vote signature target\n", set ? "set" : "get");
+        return;
+    }
+    // The node replies with its current setting also when it rejects a set
+    if (set && (response.newTarget != newTarget || response.switchTick != switchTick))
+    {
+        LOG("Node rejected the new tick vote signature target (TRIGGER_TICK must be at least 50 ticks ahead of the node)\n");
+    }
+    else if (set)
+    {
+        LOG("Successfully set tick vote signature target\n");
+    }
+    LOG("Tick vote signature target of the node:\n");
+    LOG("- Switch tick: %u\n", response.switchTick);
+    printTickVoteSignatureTarget("Target before switch tick", response.targetBeforeSwitch);
+    printTickVoteSignatureTarget("Target from switch tick", response.newTarget);
+}

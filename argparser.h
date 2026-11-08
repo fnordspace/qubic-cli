@@ -172,6 +172,10 @@ void print_help()
     printf("\t\tSet the multiplier for the conversion of raw execution time to contract execution fees to ( NUMERATOR / DENOMINATOR ), valid seed and node ip/port are required.\t\n");
     printf("\t-getexecutionfeemultiplier\n");
     printf("\t\tGet the current multiplier for the conversion of raw execution time to contract execution fees, valid seed and node ip/port are required.\t\n");
+    printf("\t-setsigndiff <NEW_DIFF> <TRIGGER_TICK>\n");
+    printf("\t\tFrom TRIGGER_TICK on, sign and verify tick votes with signature target NEW_DIFF (1 to 0xFFFFFFFE, decimal or 0x hex; lower is harder). TRIGGER_TICK must be at least 50 ticks ahead of the node. Valid seed and node ip/port are required.\t\n");
+    printf("\t-getsigndiff\n");
+    printf("\t\tGet the tick vote signature target setting of the node, valid seed and node ip/port are required.\t\n");
 
     printf("\n[ORACLE COMMANDS]\n");
     printf("\t-getoraclequery <...>\n");
@@ -598,6 +602,20 @@ void print_help()
     printf("\t\tGet incoming transfer amounts from either TESTEXB (\"B\") or TESTEXC (\"C\"). Requires the TESTEXB and TESTEXC SCs to be enabled.\n");
     printf("\t-testbidinipothroughcontract <B_OR_C> <CONTRACT_INDEX> <NUMBER_OF_SHARE> <PRICE_PER_SHARE>\n");
     printf("\t\tBid in an IPO either as TESTEXB (\"B\") or as TESTEXC (\"C\"). Requires the TESTEXB and TESTEXC SCs to be enabled.\n");
+}
+
+// Full-string strtoull (base 0); exits unless min <= value <= max
+static uint32_t parseUint32InRange(const char* a, const char* name, unsigned long long min, unsigned long long max)
+{
+    char* end = nullptr;
+    errno = 0;
+    unsigned long long v = strtoull(a, &end, 0);
+    if (errno || end == a || *end || a[0] == '-' || v < min || v > max)
+    {
+        LOG("Invalid %s %s, expected %llu to 0x%llX\n", name, a, min, max);
+        exit(1);
+    }
+    return (uint32_t)v;
 }
 
 static long long charToNumber(char* a)
@@ -1201,6 +1219,24 @@ void parseArgument(int argc, char** argv)
         if (strcmp(argv[i], "-getexecutionfeemultiplier") == 0)
         {
             g_cmd = GET_EXECUTION_FEE_MULTIPLIER;
+            i++;
+            CHECK_OVER_PARAMETERS
+            break;
+        }
+        if (strcmp(argv[i], "-setsigndiff") == 0)
+        {
+            CHECK_NUMBER_OF_PARAMETERS(2)
+            g_cmd = SET_SIGN_DIFF;
+            // 0 and 0xFFFFFFFF are rejected by the node as likely parse errors
+            g_signDiffTarget = parseUint32InRange(argv[i + 1], "NEW_DIFF", 1, 0xFFFFFFFEULL);
+            g_signDiffTick = parseUint32InRange(argv[i + 2], "TRIGGER_TICK", 1, 0xFFFFFFFFULL);
+            i += 3;
+            CHECK_OVER_PARAMETERS
+            break;
+        }
+        if (strcmp(argv[i], "-getsigndiff") == 0)
+        {
+            g_cmd = GET_SIGN_DIFF;
             i++;
             CHECK_OVER_PARAMETERS
             break;
